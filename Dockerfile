@@ -27,8 +27,8 @@ RUN chmod 0644 /etc/cron.d/mycron && \
     crontab /etc/cron.d/mycron && \
     touch /var/log/cron.log
 
-RUN chmod +x /app/entrypoint.sh
+RUN chmod +x ./entrypoint.sh
 
 EXPOSE 9002
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["./entrypoint.sh"]

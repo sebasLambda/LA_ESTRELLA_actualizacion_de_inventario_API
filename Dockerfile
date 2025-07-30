@@ -31,4 +31,4 @@ RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 9002
 
-ENTRYPOINT ["./app/entrypoint.sh"]
+ENTRYPOINT ["/app/entrypoint.sh"]

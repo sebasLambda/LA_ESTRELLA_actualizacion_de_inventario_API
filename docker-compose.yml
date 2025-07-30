@@ -1,0 +1,28 @@
+services:
+  web:
+    build: .
+    container_name: django_La_Estrella
+    command: ["python", "manage.py", "runserver", "0.0.0.0:9002"]
+    volumes:
+      - .:/app
+    ports:
+      - "9002:9002"
+    env_file:
+      - .env
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15
+    container_name: postgres_db_La_Estrella
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro 
+
+volumes:
+  postgres_data:

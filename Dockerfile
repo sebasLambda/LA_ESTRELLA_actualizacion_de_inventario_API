@@ -29,6 +29,6 @@ RUN chmod 0644 /etc/cron.d/mycron && \
 
 RUN chmod +x /app/entrypoint.sh
 
-EXPOSE 9001
+EXPOSE 9002
 
 ENTRYPOINT ["./app/entrypoint.sh"]

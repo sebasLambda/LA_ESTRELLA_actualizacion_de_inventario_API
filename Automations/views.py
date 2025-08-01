@@ -14,8 +14,9 @@ class ActualizarValorInmuebleView(APIView):
     POST /actualizar-valor/
     {
         "inmueble_id": 12475,
-        "nuevo_valor": 1850000,
-        "asesor":"juan"
+        "VlrArriendo": 1850000,
+        "VlrVenta": 300000000,
+        "asesor": "juan"
     }
     """
 
@@ -27,21 +28,38 @@ class ActualizarValorInmuebleView(APIView):
                 return int(str(valor).replace("$", "").replace(".", "").replace(",", "").strip())
 
             inmueble_id = int(request.data.get("inmueble_id"))
-            nuevo_valor = limpiar(request.data.get("nuevo_valor"))
             asesor = request.data.get("asesor", "No especificado")
+
+            # Consultar información del inmueble
             info_inmueble = ConsultarInmueblesPorId(inmueble_id)
             if not info_inmueble:
                 return Response({"error": "No se encontró información del inmueble"}, status=404)
 
-            valor_anterior = int(info_inmueble.get("valor_canon", 0))
+            gestion = info_inmueble.get("gestion", "").lower()
+
+            if gestion == "arriendo":
+                nuevo_valor = limpiar(request.data.get("VlrArriendo"))
+                valor_anterior = int(info_inmueble.get("valor_canon", 0))
+                tipo_valor = "arriendo"
+            elif gestion == "venta":
+                nuevo_valor = limpiar(request.data.get("VlrVenta"))
+                valor_anterior = int(info_inmueble.get("valor_venta", 0))
+                tipo_valor = "venta"
+
+            else:
+                return Response({"error": f"Gestión '{gestion}' no soportada"}, status=400)
+
+            if not nuevo_valor:
+                return Response({"error": "Debes especificar el nuevo valor correspondiente a la gestión."}, status=400)
+
             diferencia = nuevo_valor - valor_anterior
-            variacion = (diferencia / valor_anterior) * 100 if valor_anterior != 0 else 0
+            variacion = (diferencia / valor_anterior) * 100 if valor_anterior else 0
 
-            # Actualiza valor vía API externa
+            # Actualizar vía API externa
             client = SoftinmClient()
-            client.actualizar_valor(inmueble_id, nuevo_valor)
+            client.actualizar_valor(inmueble_id, nuevo_valor, tipo_valor)
 
-            # Registrar cambio en hoja separada
+            # Registrar en Excel
             self.registrar_cambio_precio(info_inmueble, valor_anterior, nuevo_valor, asesor)
 
             return Response({
@@ -54,6 +72,7 @@ class ActualizarValorInmuebleView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
     def registrar_cambio_precio(self, inmueble_data, precio_anterior, precio_nuevo, asesor):
         print("Registrando cambio de valor en Excel...")

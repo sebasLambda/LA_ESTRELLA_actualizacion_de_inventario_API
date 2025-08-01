@@ -193,26 +193,25 @@ class SoftinmClient:
         except:
             print("Texto:", put.text)
 
-    def actualizar_valor(self, inmueble_id: int, nuevo_valor: int):
+    def actualizar_valor(self, inmueble_id: int, nuevo_valor: int, tipo_valor: str):
         """
-        Actualiza el valor del inmueble, dependiendo del tipo de servicio.
-        - Si es Arriendo: actualiza el canon (`precio`)
-        - Si es Venta: actualiza `precio_venta`
+        Actualiza el valor del inmueble:
+        - tipo_valor = "arriendo" ➜ actualiza 'precio'
+        - tipo_valor = "venta" ➜ actualiza 'precio_venta'
         """
         url_consulta = f"https://softinm.com/api/inmueble/conulstaInmueble/{inmueble_id}"
         resp = self.session.get(url_consulta)
         resp.raise_for_status()
         inmueble = resp.json()
 
-        tipo_servicio = inmueble.get("tipo_servicio", "Arriendo")
-
-        # Lógica condicional según tipo de servicio
-        if tipo_servicio == "Arriendo":
+        if tipo_valor == "arriendo":
             inmueble["precio"] = nuevo_valor
             print(f"✔ Tipo: Arriendo – Se actualiza canon a {nuevo_valor}")
-        else:
+        elif tipo_valor == "venta":
             inmueble["precio_venta"] = nuevo_valor
-            print(f"✔ Tipo: {tipo_servicio} – Se actualiza precio_venta a {nuevo_valor}")
+            print(f"✔ Tipo: Venta – Se actualiza precio_venta a {nuevo_valor}")
+        else:
+            raise ValueError("Tipo de valor no reconocido. Usa 'arriendo' o 'venta'.")
 
         inmueble["fechamodificado"] = datetime.now().isoformat()
 
@@ -224,6 +223,7 @@ class SoftinmClient:
             print("Respuesta JSON:", put.json())
         except:
             print("Texto:", put.text)
+
 
     def actualizar_fecha_disponibilidad(self, inmueble_id: int, nueva_fecha: str):
         """

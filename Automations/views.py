@@ -9,14 +9,15 @@ import openpyxl
 from openpyxl.utils.dataframe import dataframe_to_rows
 from .Services.Chatbot import notificar_asesor
 from Inmuebles.models import Inmueble
+import threading
 class ActualizarValorInmuebleView(APIView):
     """
     POST /actualizar-valor/
     {
         "inmueble_id": 12475,
-        "VlrArriendo": 1850000,
-        "VlrVenta": 300000000,
-        "asesor": "juan"
+        "asesor": "juan",
+        "VlrVenta": "$1.850.000",
+        "VlrArriendo": "2,200,000"
     }
     """
 
@@ -29,41 +30,36 @@ class ActualizarValorInmuebleView(APIView):
 
             inmueble_id = int(request.data.get("inmueble_id"))
             asesor = request.data.get("asesor", "No especificado")
-
-            # Consultar información del inmueble
+            
+            # Determinamos el valor a actualizar según el campo recibido
+            if "VlrVenta" in request.data:
+                nuevo_valor = limpiar(request.data.get("VlrVenta"))
+                tipo_valor = "Venta"
+            elif "VlrArriendo" in request.data:
+                nuevo_valor = limpiar(request.data.get("VlrArriendo"))
+                tipo_valor = "Arriendo"
+            else:
+                return Response({"error": "Debe proporcionar 'VlrVenta' o 'VlrArriendo'"}, status=400)
+            
             info_inmueble = ConsultarInmueblesPorId(inmueble_id)
             if not info_inmueble:
                 return Response({"error": "No se encontró información del inmueble"}, status=404)
 
-            gestion = info_inmueble.get("gestion", "").lower()
-
-            if gestion == "arriendo":
-                nuevo_valor = limpiar(request.data.get("VlrArriendo"))
-                valor_anterior = int(info_inmueble.get("valor_canon", 0))
-                tipo_valor = "arriendo"
-            elif gestion == "venta":
-                nuevo_valor = limpiar(request.data.get("VlrVenta"))
-                valor_anterior = int(info_inmueble.get("valor_venta", 0))
-                tipo_valor = "venta"
-
-            else:
-                return Response({"error": f"Gestión '{gestion}' no soportada"}, status=400)
-
-            if not nuevo_valor:
-                return Response({"error": "Debes especificar el nuevo valor correspondiente a la gestión."}, status=400)
-
+            valor_anterior = int(info_inmueble.get("valor_canon", 0))
             diferencia = nuevo_valor - valor_anterior
-            variacion = (diferencia / valor_anterior) * 100 if valor_anterior else 0
+            variacion = (diferencia / valor_anterior) * 100 if valor_anterior != 0 else 0
 
-            # Actualizar vía API externa
+            # Actualiza valor vía API externa
             client = SoftinmClient()
-            client.actualizar_valor(inmueble_id, nuevo_valor, tipo_valor)
+            threading.Thread(target=client.actualizar_valor, args=(inmueble_id, nuevo_valor, tipo_valor)).start()
+            client.actualizar_valor(inmueble_id, nuevo_valor)
 
-            # Registrar en Excel
-            self.registrar_cambio_precio(info_inmueble, valor_anterior, nuevo_valor, asesor)
+            # Registrar cambio en hoja separada
+            threading.Thread(target=self.registrar_cambio_precio, args=(info_inmueble, valor_anterior, nuevo_valor, asesor)).start()
 
             return Response({
                 "mensaje": f"Inmueble {inmueble_id} actualizado correctamente",
+                "tipo_valor": tipo_valor,
                 "valor_anterior": valor_anterior,
                 "nuevo_valor": nuevo_valor,
                 "diferencia": diferencia,
@@ -159,11 +155,11 @@ class ActualizarEstatusInmuebleView(APIView):
             else:
                 fecha_disponible = datetime.now().strftime("%Y-%m-%d")
                 client.actualizar_fecha_disponibilidad(inmueble_id, fecha_disponible)
-
+                inmueble_local.fecha_disponibilidad = datetime.now()
+                inmueble_local.save()
             if not info_inmueble:
                 info_inmueble = {"codigo": inmueble_id}
-
-            self.registrar_en_excel(info_inmueble, mensaje, retirar, fecha_disponible, asesor)
+            threading.Thread(target=self.registrar_en_excel, args=(info_inmueble, mensaje, retirar, fecha_disponible if not retirar else None, asesor)).start()
 
             return Response({
                 "mensaje": f"Inmueble {inmueble_id} actualizado correctamente",

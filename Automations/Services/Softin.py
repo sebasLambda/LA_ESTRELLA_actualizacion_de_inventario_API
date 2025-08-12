@@ -4,6 +4,7 @@ import os
 import requests
 import pandas as pd
 from datetime import datetime
+from Inmuebles.models import Inmueble
 load_dotenv()
 def ConsultarTercero(nroid):
     url = f"https://zonaclientes.softinm.com/api/terceros/GetTercero/{os.getenv('SOFTIN_EXTENSION')}"
@@ -47,26 +48,23 @@ def ConsultarInmueblesPorId(idInmueble):
     if response.status_code == 200:
         inmuebles = response.json()
         if not inmuebles:
-            print("No se encontró ningún inmueble con ese código.")
+            print(f"No se encontró ningún inmueble con ese código. Código: {idInmueble}")
             return None
 
         inmueble_raw = inmuebles[0]
         tipo_servicio = inmueble_raw.get("tipo_servicio", "Arriendo")
-        
-        valor_canon = (
-            inmueble_raw.get("precio", 0)
-            if tipo_servicio == "Arriendo"
-            else inmueble_raw.get("precio_venta", 0)
-        )
+
         propietario = ConsultarTercero(inmueble_raw.get("nro_id", ""))
         inmueble = {
             "codigo": str(inmueble_raw.get("consecutivo", "")),
             "propietario": propietario.get("nombre", ""),
             "direccion": inmueble_raw.get("direccion", ""),
             "tipo": inmueble_raw.get("clase", ""),
-            "valor_canon": valor_canon,
+            "VlrArriendo": inmueble_raw.get("precio", 0),
+            "VlrVenta": inmueble_raw.get("precio_venta", 0),
             "celular": propietario.get("celular", ""),
             "gestion": tipo_servicio,
+            "matricula": inmueble_raw.get("matriculainmobiliaria", ""),
             "fecha_creacion": inmueble_raw.get("fechamodificado", ""),
         }
 
@@ -76,7 +74,6 @@ def ConsultarInmueblesPorId(idInmueble):
     else:
         print("Error al consultar inmuebles:", response.status_code, response.text)
         return None
-
 def ConsultarInmuebles():
     url = f"https://zonaclientes.softinm.com/api/inmuebles/consultar_inmuebles/{os.getenv('SOFTIN_EXTENSION')}"
     token = os.getenv("SOFTIN_TOKEN")
@@ -95,39 +92,31 @@ def ConsultarInmuebles():
 
     if response.status_code == 200:
         inmuebles = response.json()
-        lista_datos = []
 
         for inmueble in inmuebles:
-            try:
-                consecutivo = str(inmueble.get("consecutivo", ""))
-                inmueble_data = ConsultarInmueblesPorId(consecutivo)  # Debes tener esta función implementada
+            print(inmueble)
 
-                if inmueble_data:
-                    lista_datos.append({
-                        "codigo": str(inmueble_data.get("codigo", "")),
-                        "propietario": inmueble_data.get("propietario", ""),
-                        "direccion": inmueble_data.get("direccion", ""),
-                        "tipo": inmueble_data.get("tipo", ""),
-                        "valor_canon": inmueble_data.get("valor_canon", ""),
-                        "celular": inmueble_data.get("celular", ""),
+            try:
+                consecutivo = str(inmueble["consecutivo"])
+                inmueble_data = ConsultarInmueblesPorId(consecutivo)  # Asegúrate de que esta función esté implementada y devuelva dict
+
+                Inmueble.objects.update_or_create(
+                    codigo=consecutivo,
+                    defaults={
+                        "fecha_creacion": datetime.strptime(inmueble_data.get("fechamodificado", ""), "%Y-%m-%dT%H:%M:%S"),
                         "gestion": inmueble_data.get("gestion", ""),
-                        "fecha_creacion": inmueble_data.get("fecha_creacion", "")
-                    })
+                        "fecha_disponibilidad": None,
+                        "fecha_ultimo_mensaje": None,
+                        "intentos_de_contacto": 0,
+                        "estado": True,
+                    }
+                )
 
             except Exception as e:
-                print(f"Error procesando inmueble {inmueble.get('consecutivo', 'desconocido')}: {e}")
-
-        # Guardar a Excel
-        if lista_datos:
-            df = pd.DataFrame(lista_datos)
-            df.to_excel("inmuebles_exportados.xlsx", index=False)
-            print("Archivo Excel generado exitosamente.")
-        else:
-            print("No se encontraron inmuebles para exportar.")
+                print(f"Error procesando inmueble {inmueble}: {e}")
 
     else:
         print("Error al consultar inmuebles:", response.status_code, response.text)
-
 
 class SoftinmClient:
     def __init__(self):
@@ -193,25 +182,26 @@ class SoftinmClient:
         except:
             print("Texto:", put.text)
 
-    def actualizar_valor(self, inmueble_id: int, nuevo_valor: int, tipo_valor: str):
+    def actualizar_valor(self, inmueble_id: int, nuevo_valor: int, tipo_servicio: str):
         """
-        Actualiza el valor del inmueble:
-        - tipo_valor = "arriendo" ➜ actualiza 'precio'
-        - tipo_valor = "venta" ➜ actualiza 'precio_venta'
+        Actualiza el valor del inmueble, dependiendo del tipo de servicio.
+        - Si es Arriendo: actualiza el canon (`precio`)
+        - Si es Venta: actualiza `precio_venta`
+        - VlrVenta si es para venta, VlrArriendo
         """
         url_consulta = f"https://softinm.com/api/inmueble/conulstaInmueble/{inmueble_id}"
         resp = self.session.get(url_consulta)
         resp.raise_for_status()
         inmueble = resp.json()
 
-        if tipo_valor == "arriendo":
+
+        # Lógica condicional según tipo de servicio
+        if tipo_servicio == "Arriendo":
             inmueble["precio"] = nuevo_valor
             print(f"✔ Tipo: Arriendo – Se actualiza canon a {nuevo_valor}")
-        elif tipo_valor == "venta":
-            inmueble["precio_venta"] = nuevo_valor
-            print(f"✔ Tipo: Venta – Se actualiza precio_venta a {nuevo_valor}")
         else:
-            raise ValueError("Tipo de valor no reconocido. Usa 'arriendo' o 'venta'.")
+            inmueble["precio_venta"] = nuevo_valor
+            print(f"✔ Tipo: {tipo_servicio} – Se actualiza precio_venta a {nuevo_valor}")
 
         inmueble["fechamodificado"] = datetime.now().isoformat()
 
@@ -223,7 +213,6 @@ class SoftinmClient:
             print("Respuesta JSON:", put.json())
         except:
             print("Texto:", put.text)
-
 
     def actualizar_fecha_disponibilidad(self, inmueble_id: int, nueva_fecha: str):
         """

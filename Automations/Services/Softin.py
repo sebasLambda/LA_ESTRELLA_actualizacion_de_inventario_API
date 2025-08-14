@@ -34,38 +34,56 @@ def ConsultarInmueblesPorId(idInmueble):
     url = f"https://zonaclientes.softinm.com/api/inmuebles/consultar_inmuebles/{os.getenv('SOFTIN_EXTENSION')}"
     token = os.getenv('SOFTIN_TOKEN')
     
+    # Crear la sesión y agregar el token de autorización
     session = requests.Session()
     session.headers.update({
         "Authorization": f"Bearer {token}",
     })
 
+    # Definir el payload con el id del inmueble
     payload = {
         "codigo": idInmueble
     }
 
+    # Realizar la consulta mediante POST
     response = session.post(url, json=payload)
 
     if response.status_code == 200:
         inmuebles = response.json()
+
+        # Verificar si hay inmuebles y buscar el que coincida exactamente
         if not inmuebles:
             print(f"No se encontró ningún inmueble con ese código. Código: {idInmueble}")
             return None
 
-        inmueble_raw = inmuebles[0]
-        tipo_servicio = inmueble_raw.get("tipo_servicio", "Arriendo")
+        # Buscar el inmueble con código exacto
+        inmueble_match = None
+        for inmueble_raw in inmuebles:
+            if str(inmueble_raw.get("consecutivo", "")) == str(idInmueble):
+                inmueble_match = inmueble_raw
+                break
+        
+        if inmueble_match is None:
+            print(f"No se encontró un inmueble que coincida exactamente con el código: {idInmueble}")
+            return None
 
-        propietario = ConsultarTercero(inmueble_raw.get("nro_id", ""))
+        tipo_servicio = inmueble_match.get("tipo_servicio", "Arriendo")
+
+        # Obtener los datos del propietario
+        propietario = ConsultarTercero(inmueble_match.get("nro_id", ""))
+
+        # Construir el diccionario con la información del inmueble
         inmueble = {
-            "codigo": str(inmueble_raw.get("consecutivo", "")),
+            "codigo": str(inmueble_match.get("consecutivo", "")),
             "propietario": propietario.get("nombre", ""),
-            "direccion": inmueble_raw.get("direccion", ""),
-            "tipo": inmueble_raw.get("clase", ""),
-            "VlrArriendo": inmueble_raw.get("precio", 0),
-            "VlrVenta": inmueble_raw.get("precio_venta", 0),
+            "direccion": inmueble_match.get("direccion", ""),
+            "tipo": inmueble_match.get("clase", ""),
+            "VlrArriendo": inmueble_match.get("precio", 0),
+            "VlrVenta": inmueble_match.get("precio_venta", 0),
             "celular": propietario.get("celular", ""),
             "gestion": tipo_servicio,
-            "matricula": inmueble_raw.get("matriculainmobiliaria", ""),
-            "fecha_creacion": inmueble_raw.get("fechamodificado", ""),
+            "matricula": inmueble_match.get("matriculainmobiliaria", ""),
+            "fecha_creacion": inmueble_match.get("fechamodificado", ""),
         }
 
         print(f"Inmueble consultado: {inmueble}")

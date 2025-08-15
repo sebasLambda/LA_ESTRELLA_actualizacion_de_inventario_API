@@ -163,10 +163,13 @@ class ActualizarEstatusInmuebleView(APIView):
             if retirar:
                 client.retirar_inmueble(inmueble_id)
             else:
-                fecha_disponible = datetime.now().strftime("%Y-%m-%d")
-                client.actualizar_fecha_disponibilidad(inmueble_id, fecha_disponible)
-                inmueble_local.fecha_disponibilidad = datetime.now()
-                inmueble_local.save()
+                try:
+                    fecha_disponible = datetime.now().strftime("%Y-%m-%d")
+                    client.actualizar_fecha_disponibilidad(inmueble_id, fecha_disponible)
+                    inmueble_local.fecha_disponibilidad = datetime.now()
+                    inmueble_local.save()
+                except Exception as e:
+                    print(f"Error al actualizar fecha de disponibilidad: {e}")
             if not info_inmueble:
                 info_inmueble = {"codigo": inmueble_id}
             threading.Thread(target=self.registrar_en_excel, args=(info_inmueble, mensaje, retirar, fecha_disponible if not retirar else None, asesor)).start()

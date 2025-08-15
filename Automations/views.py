@@ -51,10 +51,17 @@ class ActualizarValorInmuebleView(APIView):
 
             # Actualiza valor vía API externa
             client = SoftinmClient()
-            threading.Thread(target=client.actualizar_valor, args=(inmueble_id, nuevo_valor, tipo_valor)).start()
+
+            try:
+                threading.Thread(target=client.actualizar_valor, args=(inmueble_id, nuevo_valor, tipo_valor)).start()
+            except Exception as e:
+                return Response({"error": f"Error al actualizar el valor en la API externa: {str(e)}"}, status=500)
 
             # Registrar cambio en hoja separada
-            threading.Thread(target=self.registrar_cambio_precio, args=(info_inmueble, valor_anterior, nuevo_valor, asesor)).start()
+            try:
+                threading.Thread(target=self.registrar_cambio_precio, args=(info_inmueble, valor_anterior, nuevo_valor, asesor)).start()
+            except Exception as e:
+                return Response({"error": f"Error al registrar el cambio en la hoja separada: {str(e)}"}, status=500)
 
             return Response({
                 "mensaje": f"Inmueble {inmueble_id} actualizado correctamente",
@@ -65,8 +72,12 @@ class ActualizarValorInmuebleView(APIView):
                 "variacion_porcentual": round(variacion, 2)
             })
 
+        except ValueError as e:
+            return Response({"error": "Formato de valor incorrecto. Verifique los valores de entrada."}, status=400)
+        except KeyError as e:
+            return Response({"error": f"Falta el campo requerido: {str(e)}"}, status=400)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": f"Error interno: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
     def registrar_cambio_precio(self, inmueble_data, precio_anterior, precio_nuevo, asesor):

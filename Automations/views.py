@@ -52,7 +52,6 @@ class ActualizarValorInmuebleView(APIView):
             # Actualiza valor vía API externa
             client = SoftinmClient()
             threading.Thread(target=client.actualizar_valor, args=(inmueble_id, nuevo_valor, tipo_valor)).start()
-            client.actualizar_valor(inmueble_id, nuevo_valor)
 
             # Registrar cambio en hoja separada
             threading.Thread(target=self.registrar_cambio_precio, args=(info_inmueble, valor_anterior, nuevo_valor, asesor)).start()
